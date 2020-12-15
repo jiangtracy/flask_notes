@@ -1,13 +1,14 @@
 from flask import Flask, render_template, redirect, session, flash
 from flask_debugtoolbar import DebugToolbarExtension
 from models import connect_db, db, User, Note
-from forms import RegisterForm, LoginForm, AddNoteForm
+from forms import RegisterForm, LoginForm, NoteForm
 
 app = Flask(__name__)
 app.config["SQLALCHEMY_DATABASE_URI"] = "postgres:///flask_notes"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SQLALCHEMY_ECHO"] = True
 app.config["SECRET_KEY"] = "abc123"
+app.config['DEBUG_TB_INTERCEPT_REDIRECTS'] = False
 
 connect_db(app)
 db.create_all()
@@ -103,7 +104,7 @@ def show_user_detail(username):
         return redirect("/")
 
 
-@app.route('/users/<username>/delete')
+@app.route('/users/<username>/delete', methods=['POST'])
 def delete_user(username):
     """ Delete the user by deleting all their posts first
         Only allow this when the user is logged in
@@ -132,21 +133,78 @@ def delete_user(username):
 
 
 @app.route("/users/<username>/notes/add", methods=["GET", "POST"])
-def add_notes(username):
+def handle_add_notes(username):
+    """ Display form to add notes for the logged in user.
+        Add new note and redirect to user detail.
+    """
 
-    form = AddNoteForm()
+    if session.get('user_id') == username:
 
-    if form.validate_on_submit():
+        form = NoteForm()
 
-        new_note = Note()
-        form.populate_obj(new_note)
-        new_note.owner = username
+        if form.validate_on_submit():
 
-        db.session.add(new_note)
+            new_note = Note()
+            form.populate_obj(new_note)
+            new_note.owner = username
+
+            db.session.add(new_note)
+            db.session.commit()
+
+            flash("Note has been added")
+
+            return redirect(f"/users/{username}")
+        else:
+            return render_template("add_notes.html", form=form)
+    else:
+        flash("You are not authorized to add notes to this user!")   
+        return redirect('/')     
+
+
+@app.route("/notes/<int:note_id>/update", methods=["GET", "POST"])
+def handle_update_note(note_id):
+    """ Display form to update notes for the logged in user.
+        Update note and redirect to user detail.
+    """
+
+    note = Note.query.get_or_404(note_id)
+
+    if session.get('user_id') == note.owner:
+
+        form = NoteForm(obj=note)
+
+        if form.validate_on_submit():
+
+            form.populate_obj(note)
+            db.session.commit()
+
+            flash("Note has been updated!")
+
+            return redirect(f"/users/{note.owner}")
+        else:
+            return render_template("update_notes.html", form=form)
+
+    else:
+        flash("You are not authorized to update this note!")
+        return redirect('/')
+
+
+
+@app.route("/notes/<int:note_id>/delete", methods=["POST"])
+def delete_note(note_id):
+    """ Handles delete note. """
+
+    note = Note.query.get_or_404(note_id)
+
+    if session.get('user_id') == note.owner:
+
+        db.session.delete(note)
         db.session.commit()
 
-        flash("Note has been added")
+        flash("Note deleted!")
 
-        return redirect(f"/users/{username}")
+        return redirect(f"/users/{note.owner}")
     else:
-        return render_template("add_notes.html", form=form)
+        flash('You are not authorized to delete this note!')
+        return redirect('/')
+

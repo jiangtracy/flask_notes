@@ -33,7 +33,7 @@ class User(db.Model):
                            nullable=False)
     last_name = db.Column(db.String(30),
                           nullable=False)
-    notes = db.relationship("Note", backref="users")
+    notes = db.relationship("Note", backref="user")
     
 
     # start_register
