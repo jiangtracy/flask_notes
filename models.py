@@ -30,19 +30,25 @@ class User(db.Model):
                       nullable=False,
                       unique=True)
     first_name = db.Column(db.String(30),
-                      nullable=False)
+                           nullable=False)
     last_name = db.Column(db.String(30),
-                      nullable=False)
+                          nullable=False)
     
+
     # start_register
     @classmethod
-    def register(cls, username, pwd):
+    def register(cls, username, pwd, email, f_name, l_name):
         """Register user w/hashed password & return user."""
 
         hashed = bcrypt.generate_password_hash(pwd).decode('utf8')
 
-        # return instance of user w/username and hashed pwd
-        return cls(username=username, password=hashed)
+        # return instance of user w/username and hashed pwd along with
+        # email, first_name and last_name
+        return cls(username=username,
+                   password=hashed,
+                   email=email,
+                   first_name=f_name,
+                   last_name=l_name)
 
     # end_register
 
