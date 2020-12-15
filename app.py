@@ -1,7 +1,7 @@
 from flask import Flask, render_template, redirect, session, flash
 from flask_debugtoolbar import DebugToolbarExtension
-from models import connect_db, db, User
-from forms import RegisterForm, LoginForm
+from models import connect_db, db, User, Note
+from forms import RegisterForm, LoginForm, AddNoteForm
 
 app = Flask(__name__)
 app.config["SQLALCHEMY_DATABASE_URI"] = "postgres:///flask_notes"
@@ -101,7 +101,52 @@ def show_user_detail(username):
     else:
         flash("You are not authorized to view!")
         return redirect("/")
-   
-        
-@app.route('/users/<username>')
 
+
+@app.route('/users/<username>/delete')
+def delete_user(username):
+    """ Delete the user by deleting all their posts first
+        Only allow this when the user is logged in
+    """
+
+    if session.get('user_id') == username:
+
+        user = User.query.get(username)
+
+        # Delete all the user's notes
+        Note.query.filter_by(owner=username).delete()
+        db.session.commit()
+
+        db.session.delete(user)
+        db.session.commit()
+
+        flash("User has been deleted")
+
+        # Clear any user info from the session
+        session.pop("user_id", None)
+
+        return redirect("/")
+    else:
+        flash("You are not authorized to delete this user!")
+        return redirect("/")
+
+
+@app.route("/users/<username>/notes/add", methods=["GET", "POST"])
+def add_notes(username):
+
+    form = AddNoteForm()
+
+    if form.validate_on_submit():
+
+        new_note = Note()
+        form.populate_obj(new_note)
+        new_note.owner = username
+
+        db.session.add(new_note)
+        db.session.commit()
+
+        flash("Note has been added")
+
+        return redirect(f"/users/{username}")
+    else:
+        return render_template("add_notes.html", form=form)
