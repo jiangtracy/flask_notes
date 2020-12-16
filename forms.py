@@ -31,3 +31,7 @@ class NoteForm(FlaskForm):
     title = StringField("Title", validators=[InputRequired(),
                                              Length(max=100)])
     content = TextAreaField("Content", validators=[InputRequired()])
+
+
+class DeleteForm(FlaskForm):
+    """ Form used for validation when deleting """

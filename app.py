@@ -1,7 +1,8 @@
-from flask import Flask, render_template, redirect, session, flash
+from flask import Flask, render_template, redirect, session, flash 
+from werkzeug.exceptions import Unauthorized
 from flask_debugtoolbar import DebugToolbarExtension
 from models import connect_db, db, User, Note
-from forms import RegisterForm, LoginForm, NoteForm
+from forms import RegisterForm, LoginForm, NoteForm, DeleteForm
 
 app = Flask(__name__)
 app.config["SQLALCHEMY_DATABASE_URI"] = "postgres:///flask_notes"
@@ -14,6 +15,16 @@ connect_db(app)
 db.create_all()
 
 toolbar = DebugToolbarExtension(app)
+
+
+@app.errorhandler(404)
+def show_404_page(err):
+    return render_template('404.html'), 404
+
+
+@app.errorhandler(401)
+def show_401_page(err):
+    return render_template('401.html'), 401
 
 
 @app.route('/')
@@ -110,11 +121,14 @@ def show_user_detail(username):
 
     # Guard
     if session.get('user_id') != username:
-        flash("You are not authorized to view!")
-        return redirect("/")
+        raise Unauthorized()
+        # flash("You are not authorized to view!")
+        # return redirect("/")
 
     user = User.query.get(username)
-    return render_template('user_detail.html', user=user)
+    form = DeleteForm()
+
+    return render_template('user_detail.html', user=user, form=form)
 
 
 @app.route('/users/<username>/delete', methods=['POST'])
@@ -129,17 +143,19 @@ def delete_user(username):
 
     user = User.query.get(username)
 
-    # Delete all the user's notes
-    Note.query.filter_by(owner=username).delete()
-    db.session.commit() # Not necessary
+    form = DeleteForm()
+    if form.validate_on_submit():
+        # Delete all the user's notes
+        Note.query.filter_by(owner=username).delete()
+        db.session.commit() # Not necessary
 
-    db.session.delete(user)
-    db.session.commit()
+        db.session.delete(user)
+        db.session.commit()
 
-    flash("User has been deleted")
+        flash("User has been deleted")
 
-    # Clear any user info from the session
-    session.pop("user_id", None)
+        # Clear any user info from the session
+        session.pop("user_id", None)
 
     return redirect("/")
 
@@ -205,14 +221,15 @@ def delete_note(note_id):
      """
 
     note = Note.query.get_or_404(note_id)
-
     if session.get('user_id') != note.owner:
         flash('You are not authorized to delete this note!')
-        return redirect('/')
+        return redirect('/')    
+    form = DeleteForm()
+    if form.validate_on_submit():
 
-    db.session.delete(note)
-    db.session.commit()
-
-    flash("Note deleted!")
+        db.session.delete(note)
+        db.session.commit()
+        flash("Note deleted!")
 
     return redirect(f"/users/{note.owner}")
+
