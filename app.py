@@ -15,6 +15,7 @@ db.create_all()
 
 toolbar = DebugToolbarExtension(app)
 
+
 @app.route('/')
 def show_homepage():
     """ Redirect to register page """
@@ -24,9 +25,15 @@ def show_homepage():
 @app.route('/register', methods=["GET", "POST"])
 def handle_registration():
     """ Show the registration form or handles the registration
-        of a user, if the email is taken, take them back to the 
+        of a user, if the email is taken, take them back to the
         registration form
+        - If someone is already logged in, redirect to their page
     """
+
+    username = session.get("user_id")
+
+    if username:
+        return redirect(f"/users/{username}")
 
     form = RegisterForm()
 
@@ -58,6 +65,11 @@ def handle_registration():
 @app.route("/login", methods=["GET", "POST"])
 def handle_login():
     """ Shows the login form or handles logging the user in """
+
+    username = session.get("user_id")
+
+    if username:
+        return redirect(f"/users/{username}")
 
     form = LoginForm()
 
@@ -95,13 +107,14 @@ def show_user_detail(username):
     """ Show user details if user is logged in.
         Otherwise flash message and redirect to homepage.
     """
-    if session.get('user_id') == username:
-        user = User.query.get(username)
-        return render_template('user_detail.html', user=user)
 
-    else:
+    # Guard
+    if session.get('user_id') != username:
         flash("You are not authorized to view!")
         return redirect("/")
+
+    user = User.query.get(username)
+    return render_template('user_detail.html', user=user)
 
 
 @app.route('/users/<username>/delete', methods=['POST'])
@@ -110,26 +123,25 @@ def delete_user(username):
         Only allow this when the user is logged in
     """
 
-    if session.get('user_id') == username:
-
-        user = User.query.get(username)
-
-        # Delete all the user's notes
-        Note.query.filter_by(owner=username).delete()
-        db.session.commit()
-
-        db.session.delete(user)
-        db.session.commit()
-
-        flash("User has been deleted")
-
-        # Clear any user info from the session
-        session.pop("user_id", None)
-
-        return redirect("/")
-    else:
+    if session.get('user_id') != username:
         flash("You are not authorized to delete this user!")
         return redirect("/")
+
+    user = User.query.get(username)
+
+    # Delete all the user's notes
+    Note.query.filter_by(owner=username).delete()
+    db.session.commit() # Not necessary
+
+    db.session.delete(user)
+    db.session.commit()
+
+    flash("User has been deleted")
+
+    # Clear any user info from the session
+    session.pop("user_id", None)
+
+    return redirect("/")
 
 
 @app.route("/users/<username>/notes/add", methods=["GET", "POST"])
@@ -138,27 +150,26 @@ def handle_add_notes(username):
         Add new note and redirect to user detail.
     """
 
-    if session.get('user_id') == username:
+    if session.get('user_id') != username:
+        flash("You are not authorized to add notes to this user!")
+        return redirect('/')
 
-        form = NoteForm()
+    form = NoteForm()
 
-        if form.validate_on_submit():
+    if form.validate_on_submit():
 
-            new_note = Note()
-            form.populate_obj(new_note)
-            new_note.owner = username
+        new_note = Note()
+        form.populate_obj(new_note)
+        new_note.owner = username
 
-            db.session.add(new_note)
-            db.session.commit()
+        db.session.add(new_note)
+        db.session.commit()
 
-            flash("Note has been added")
+        flash("Note has been added")
 
-            return redirect(f"/users/{username}")
-        else:
-            return render_template("add_notes.html", form=form)
+        return redirect(f"/users/{username}")
     else:
-        flash("You are not authorized to add notes to this user!")   
-        return redirect('/')     
+        return render_template("add_notes.html", form=form)
 
 
 @app.route("/notes/<int:note_id>/update", methods=["GET", "POST"])
@@ -169,42 +180,39 @@ def handle_update_note(note_id):
 
     note = Note.query.get_or_404(note_id)
 
-    if session.get('user_id') == note.owner:
-
-        form = NoteForm(obj=note)
-
-        if form.validate_on_submit():
-
-            form.populate_obj(note)
-            db.session.commit()
-
-            flash("Note has been updated!")
-
-            return redirect(f"/users/{note.owner}")
-        else:
-            return render_template("update_notes.html", form=form)
-
-    else:
+    if session.get('user_id') != note.owner:
         flash("You are not authorized to update this note!")
         return redirect('/')
 
+    form = NoteForm(obj=note)
+
+    if form.validate_on_submit():
+
+        form.populate_obj(note)
+        db.session.commit()
+
+        flash("Note has been updated!")
+
+        return redirect(f"/users/{note.owner}")
+    else:
+        return render_template("update_notes.html", form=form)
 
 
 @app.route("/notes/<int:note_id>/delete", methods=["POST"])
 def delete_note(note_id):
-    """ Handles delete note. """
+    """ Handles delete note only if it belongs to the logged
+        in user
+     """
 
     note = Note.query.get_or_404(note_id)
 
-    if session.get('user_id') == note.owner:
-
-        db.session.delete(note)
-        db.session.commit()
-
-        flash("Note deleted!")
-
-        return redirect(f"/users/{note.owner}")
-    else:
+    if session.get('user_id') != note.owner:
         flash('You are not authorized to delete this note!')
         return redirect('/')
 
+    db.session.delete(note)
+    db.session.commit()
+
+    flash("Note deleted!")
+
+    return redirect(f"/users/{note.owner}")

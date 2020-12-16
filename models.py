@@ -13,7 +13,6 @@ def connect_db(app):
     db.init_app(app)
 
 
-
 class User(db.Model):
     """Site user."""
 
@@ -34,7 +33,6 @@ class User(db.Model):
     last_name = db.Column(db.String(30),
                           nullable=False)
     notes = db.relationship("Note", backref="user")
-    
 
     # start_register
     @classmethod
@@ -84,6 +82,5 @@ class Note(db.Model):
     content = db.Column(db.Text,
                         nullable=False)
     owner = db.Column(db.String(20),
-                      db.ForeignKey('users.username'))
-    
-    
+                      db.ForeignKey('users.username'),
+                      nullable=False)
